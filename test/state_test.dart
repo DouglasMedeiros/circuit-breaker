@@ -2,7 +2,6 @@ import 'package:circuit_breaker/circuit_breaker.dart';
 import 'package:test/test.dart';
 
 void main() {
-
   test('Should_Returns_Closed', () async {
     final State state = State.GREEN;
     expect(state.toString(), 'Closed');

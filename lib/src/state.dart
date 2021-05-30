@@ -2,7 +2,6 @@ import 'package:meta/meta.dart';
 
 /// State Circuit
 class State {
-
   /// GREEN (Closed)
   static const State GREEN = State.fromCode(0);
 

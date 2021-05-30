@@ -10,8 +10,8 @@ import 'mock_client.dart';
 void main() {
   late Request request;
 
-  MockClient _makeClient({int statusCode = 200}) => MockClient((Request request) async =>
-      Response(
+  MockClient _makeClient({int statusCode = 200}) =>
+      MockClient((Request request) async => Response(
           json.encode(request.bodyFields), statusCode,
           request: request,
           headers: <String, String>{'content-type': 'application/json'}));
@@ -28,7 +28,6 @@ void main() {
 
   group('STATE GREEN', () {
     test('Should_Success_When_SuccessThresholdNotReached', () async {
-
       final CircuitBreaker cb = CircuitBreaker(
           request: request,
           failureThreshold: 3,
@@ -42,8 +41,8 @@ void main() {
       expect(cb.state, State.GREEN);
     });
 
-    test(
-        'Should_Success_When_SuccessThresholdNotReached_WithChained', () async {
+    test('Should_Success_When_SuccessThresholdNotReached_WithChained',
+        () async {
       final CircuitBreaker cb = CircuitBreaker(
           request: request,
           failureThreshold: 3,
@@ -104,8 +103,7 @@ void main() {
         expect(cb.nextAttempt, DateTime.now().add(cb.timeout));
         expect(cb.nextAttempt.isAfter(DateTime.now()), true);
       } catch (_) {
-
-        io.sleep(const Duration(seconds:3));
+        io.sleep(const Duration(seconds: 3));
 
         await cb.execute();
         final BaseResponse response = await cb.execute();
@@ -120,7 +118,6 @@ void main() {
       }
     });
   });
-
 
   group('STATE RED', () {
     test('Should_Fail_When_FailThresholdReached', () async {

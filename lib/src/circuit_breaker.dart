@@ -26,11 +26,11 @@ class CircuitBreaker {
   /// Timeout
   final Duration timeout;
 
-  CircuitBreaker({
-    required this.request,
-    this.failureThreshold = 3,
-    this.successThreshold = 2,
-    this.timeout = const Duration(milliseconds: 3500)})
+  CircuitBreaker(
+      {required this.request,
+      this.failureThreshold = 3,
+      this.successThreshold = 2,
+      this.timeout = const Duration(milliseconds: 3500)})
       : _nextAttempt = DateTime.now(),
         _state = State.GREEN;
 
@@ -43,10 +43,12 @@ class CircuitBreaker {
   /// Execute
   Future<BaseResponse> execute() async {
     if (_state == State.RED) {
-      if (_nextAttempt.millisecondsSinceEpoch <= DateTime.now().millisecondsSinceEpoch) {
+      if (_nextAttempt.millisecondsSinceEpoch <=
+          DateTime.now().millisecondsSinceEpoch) {
         _state = State.YELLOW;
       } else {
-        throw CircuitBreakerException(request: request,
+        throw CircuitBreakerException(
+            request: request,
             cause: 'Circuit suspended (${request.url}). You shall not pass!');
       }
     }
