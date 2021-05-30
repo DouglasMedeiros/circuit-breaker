@@ -2,16 +2,12 @@ import 'dart:convert';
 import 'dart:io' as io;
 
 import 'package:circuit_breaker/circuit_breaker.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart';
+import 'package:test/test.dart';
 
 import 'mock_client.dart';
 
 void main() {
-
-  TestWidgetsFlutterBinding.ensureInitialized();
-  io.HttpOverrides.global  = null;
-
   late Request request;
 
   MockClient _makeClient({int statusCode = 200}) => MockClient((Request request) async =>

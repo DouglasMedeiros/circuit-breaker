@@ -1,8 +1,7 @@
 import 'package:circuit_breaker/circuit_breaker.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
 
   test('Should_Returns_Closed', () async {
     final State state = State.GREEN;
