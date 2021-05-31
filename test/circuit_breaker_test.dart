@@ -103,7 +103,7 @@ void main() {
         expect(cb.nextAttempt, DateTime.now().add(cb.timeout));
         expect(cb.nextAttempt.isAfter(DateTime.now()), true);
       } catch (_) {
-        await Future.delayed(const Duration(seconds: 3), () async {
+        await Future<void>.delayed(const Duration(seconds: 3), () async {
           await cb.execute();
           final BaseResponse response = await cb.execute();
 
