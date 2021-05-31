@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io' as io;
 
 import 'package:circuit_breaker/circuit_breaker.dart';
 import 'package:http/http.dart';
@@ -90,7 +89,8 @@ void main() {
       cb.client = _makeClient(statusCode: 500);
 
       expect(cb.state, State.GREEN);
-      expect(cb.nextAttempt.isBefore(DateTime.now()), true);
+      expect(cb.nextAttempt.microsecondsSinceEpoch,
+          lessThanOrEqualTo(DateTime.now().microsecondsSinceEpoch));
 
       await cb.execute();
       await cb.execute();
@@ -103,18 +103,18 @@ void main() {
         expect(cb.nextAttempt, DateTime.now().add(cb.timeout));
         expect(cb.nextAttempt.isAfter(DateTime.now()), true);
       } catch (_) {
-        io.sleep(const Duration(seconds: 3));
+        await Future.delayed(const Duration(seconds: 3), () async {
+          await cb.execute();
+          final BaseResponse response = await cb.execute();
 
-        await cb.execute();
-        final BaseResponse response = await cb.execute();
+          expect(response.statusCode, 200);
+          expect(cb.state, State.YELLOW);
 
-        expect(response.statusCode, 200);
-        expect(cb.state, State.YELLOW);
+          await cb.execute();
 
-        await cb.execute();
-
-        expect(response.statusCode, 200);
-        expect(cb.state, State.GREEN);
+          expect(response.statusCode, 200);
+          expect(cb.state, State.GREEN);
+        });
       }
     });
   });
