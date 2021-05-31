@@ -1,6 +1,8 @@
 # Circuit Breaker
 
 [![Build Status](https://github.com/DouglasMedeiros/circuit-breaker/workflows/Dart%20CI/badge.svg)](https://github.com/DouglasMedeiros/circuit-breaker/actions?query=workflow%3A"Dart+CI"+branch%3Amaster)
+![GitHub top language](https://img.shields.io/github/languages/top/DouglasMedeiros/circuit-breaker)
+
 
 ## Using
 
