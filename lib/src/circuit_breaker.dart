@@ -5,12 +5,14 @@ import 'package:http/http.dart';
 import 'exception.dart';
 import 'state.dart';
 
+import 'dart:async';
+
 class CircuitBreaker {
   /// Client HTTP
   Client client = Client();
 
   /// Request
-  final BaseRequest request;
+  final Request request;
 
   State _state;
   int _failureCount = 0;
@@ -53,13 +55,22 @@ class CircuitBreaker {
       }
     }
 
-    final StreamedResponse response = await client.send(request);
+    final StreamedResponse response = await client.send(_cloneRequest(request));
 
     if (response.statusCode >= 200 && response.statusCode <= 299) {
       return _success(response);
     } else {
       return _failure(response);
     }
+  }
+
+  Request _cloneRequest(Request request) {
+    var r = Request(request.method, request.url);
+    r.bodyFields = request.bodyFields;
+    r.encoding = request.encoding;
+    r.body = request.body;
+    r.persistentConnection = request.persistentConnection;
+    return r;
   }
 
   BaseResponse _success(BaseResponse response) {
@@ -73,7 +84,6 @@ class CircuitBreaker {
         _state = State.GREEN;
       }
     }
-
     return response;
   }
 
@@ -84,7 +94,6 @@ class CircuitBreaker {
       _state = State.RED;
       _nextAttempt = DateTime.now().add(timeout);
     }
-
     return response;
   }
 }
