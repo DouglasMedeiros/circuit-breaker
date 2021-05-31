@@ -32,11 +32,7 @@ class MockClient extends BaseClient {
 
   @override
   Future<StreamedResponse> send(BaseRequest request) async {
-    // ignore: always_specify_types
-    ByteStream bodyStream = const ByteStream(Stream.empty());
-    if (!request.finalized) {
-      bodyStream = request.finalize();
-    }
+    ByteStream bodyStream = request.finalize();
     return await _handler(request, bodyStream);
   }
 }

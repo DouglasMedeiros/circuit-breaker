@@ -1,8 +1,8 @@
 # Circuit Breaker
 
+[![pub package](https://img.shields.io/pub/v/circuit_breaker.svg)](https://pub.dev/packages/circuit_breaker)
 [![Build Status](https://github.com/DouglasMedeiros/circuit-breaker/workflows/Dart%20CI/badge.svg)](https://github.com/DouglasMedeiros/circuit-breaker/actions?query=workflow%3A"Dart+CI"+branch%3Amaster)
 ![GitHub top language](https://img.shields.io/github/languages/top/DouglasMedeiros/circuit-breaker)
-
 
 ## Using
 
