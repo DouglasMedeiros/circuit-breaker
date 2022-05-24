@@ -5,8 +5,6 @@ import 'package:http/http.dart';
 import 'exception.dart';
 import 'state.dart';
 
-import 'dart:async';
-
 class CircuitBreaker {
   /// Client HTTP
   Client client = Client();
@@ -65,7 +63,7 @@ class CircuitBreaker {
   }
 
   Request _cloneRequest(Request request) {
-    var r = Request(request.method, request.url);
+    final Request r = Request(request.method, request.url);
     r.bodyFields = request.bodyFields;
     r.encoding = request.encoding;
     r.body = request.body;
