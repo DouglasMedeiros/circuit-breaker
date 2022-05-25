@@ -1,15 +1,17 @@
 name: circuit_breaker
 description: Implementation of the Circuit Breaker Design Pattern for HTTP requests
-version: 1.0.2
+version: 1.0.3
 homepage: https://github.com/DouglasMedeiros/circuit-breaker
+repository: https://github.com/DouglasMedeiros/circuit-breaker
+issue_tracker: https://github.com/DouglasMedeiros/circuit-breaker/issues
 
 environment:
-  sdk: ">=2.12.0 <3.0.0"
+  sdk: '>=2.17.0 <3.0.0'
 
 dependencies:
-  flutter_lints: ^1.0.4
-  http: ^0.13.3
-  meta: ^1.4.0
+  flutter_lints: ^2.0.1
+  http: ^0.13.4
+  meta: ^1.8.0
 
 dev_dependencies:
   test: ^1.16.0
