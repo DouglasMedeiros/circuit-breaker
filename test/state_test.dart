@@ -3,17 +3,17 @@ import 'package:test/test.dart';
 
 void main() {
   test('Should_Returns_Closed', () async {
-    final State state = State.GREEN;
+    const State state = State.GREEN;
     expect(state.toString(), 'Closed');
   });
 
   test('Should_Returns_Open', () async {
-    final State state = State.RED;
+    const State state = State.RED;
     expect(state.toString(), 'Open');
   });
 
   test('Should_Returns_HalfOpen', () async {
-    final State state = State.YELLOW;
+    const State state = State.YELLOW;
     expect(state.toString(), 'Half open');
   });
 

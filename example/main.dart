@@ -8,5 +8,5 @@ void main() {
       request: request,
       failureThreshold: 3,
       successThreshold: 5,
-      timeout: Duration(seconds: 2));
+      timeout: const Duration(seconds: 2));
 }
