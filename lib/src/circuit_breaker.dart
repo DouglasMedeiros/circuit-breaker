@@ -41,7 +41,7 @@ class CircuitBreaker {
   DateTime get nextAttempt => _nextAttempt;
 
   /// Execute
-  Future<BaseResponse> execute() async {
+  Future<Response> execute() async {
     if (_state == State.RED) {
       if (_nextAttempt.millisecondsSinceEpoch <=
           DateTime.now().millisecondsSinceEpoch) {
@@ -53,7 +53,7 @@ class CircuitBreaker {
       }
     }
 
-    final StreamedResponse response = await client.send(_cloneRequest(request));
+    final Response response = await Response.fromStream(await client.send(_cloneRequest(request)));
 
     if (response.statusCode >= 200 && response.statusCode <= 299) {
       return _success(response);
@@ -71,7 +71,7 @@ class CircuitBreaker {
     return r;
   }
 
-  BaseResponse _success(BaseResponse response) {
+  Response _success(Response response) {
     _failureCount = 0;
 
     if (_state == State.YELLOW) {
@@ -85,7 +85,7 @@ class CircuitBreaker {
     return response;
   }
 
-  BaseResponse _failure(BaseResponse response) {
+  Response _failure(Response response) {
     _failureCount++;
 
     if (_failureCount >= failureThreshold) {
