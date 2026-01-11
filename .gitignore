@@ -75,3 +75,6 @@ pubspec.lock
 !**/ios/**/default.pbxuser
 !**/ios/**/default.perspectivev3
 /coverage
+
+# FVM Version Cache
+.fvm/
