@@ -4,7 +4,7 @@
 
 Implementación del patrón de diseño Circuit Breaker (Cortacircuitos) en Dart.
 
-**Versión:** 3.0.0 · **Licencia:** Ver LICENSE
+**Versión:** 3.0.1 · **Licencia:** Ver LICENSE
 
 [![pub package](https://img.shields.io/pub/v/circuit_breaker.svg)](https://pub.dev/packages/circuit_breaker)
 [![Build Status](https://github.com/DouglasMedeiros/circuit-breaker/workflows/Dart%20CI/badge.svg)](https://github.com/DouglasMedeiros/circuit-breaker/actions?query=workflow%3A"Dart+CI"+branch%3Amaster)
