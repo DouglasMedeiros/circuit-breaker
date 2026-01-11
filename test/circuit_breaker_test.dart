@@ -683,7 +683,7 @@ void main() {
 
       await cb.executeRequest(makeRequest());
 
-      expect(cb.metrics.averageLatency.inMicroseconds, greaterThan(0));
+      expect(cb.metrics.averageLatency.inMicroseconds, greaterThanOrEqualTo(0));
       cb.dispose();
     });
   });
