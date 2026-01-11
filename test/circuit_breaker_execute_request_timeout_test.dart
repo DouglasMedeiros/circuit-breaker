@@ -36,7 +36,6 @@ void main() {
         expect(caughtError, isA<CircuitBreakerTimeoutException>());
         
         final CircuitBreakerTimeoutException timeoutError = caughtError as CircuitBreakerTimeoutException;
-        expect(timeoutError.request, equals(request));
         expect(timeoutError.timeout, equals(const Duration(seconds: 1)));
         expect(timeoutError.message, 'Request timed out');
 

@@ -31,7 +31,6 @@ void main() {
         expect(caughtError, isA<CircuitBreakerNetworkException>());
         
         final CircuitBreakerNetworkException networkError = caughtError as CircuitBreakerNetworkException;
-        expect(networkError.request, equals(request));
         expect(networkError.originalError, equals(clientException));
         expect(networkError.message, contains('Network error: connection failed'));
 

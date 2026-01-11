@@ -29,7 +29,7 @@ void main() {
           timeout: const Duration(seconds: 2),
         );
 
-        final StreamedResponse response = await cb.execute(makeRequest());
+        final StreamedResponse response = await cb.executeRequest(makeRequest());
 
         expect(response.statusCode, 200);
         expect(cb.state, CircuitState.closed);
@@ -42,9 +42,9 @@ void main() {
           failureThreshold: 3,
         );
 
-        await cb.execute(makeRequest());
-        await cb.execute(makeRequest());
-        await cb.execute(makeRequest());
+        await cb.executeRequest(makeRequest());
+        await cb.executeRequest(makeRequest());
+        await cb.executeRequest(makeRequest());
 
         expect(cb.state, CircuitState.closed);
         expect(cb.failureCount, 0);
@@ -57,7 +57,7 @@ void main() {
           failureThreshold: 3,
         );
 
-        await cb.execute(makeRequest());
+        await cb.executeRequest(makeRequest());
 
         expect(cb.state, CircuitState.closed);
         expect(cb.failureCount, 1);
@@ -73,7 +73,7 @@ void main() {
         );
         
         // Start request
-        final Future<StreamedResponse> future = cb.execute(makeRequest());
+        final Future<StreamedResponse> future = cb.executeRequest(makeRequest());
         
         // Dispose immediately
         cb.dispose();
@@ -94,9 +94,9 @@ void main() {
           timeout: const Duration(seconds: 2),
         );
 
-        await cb.execute(makeRequest());
-        await cb.execute(makeRequest());
-        await cb.execute(makeRequest());
+        await cb.executeRequest(makeRequest());
+        await cb.executeRequest(makeRequest());
+        await cb.executeRequest(makeRequest());
 
         expect(cb.state, CircuitState.open);
         cb.dispose();
@@ -109,13 +109,13 @@ void main() {
           timeout: const Duration(seconds: 2),
         );
 
-        await cb.execute(makeRequest());
-        await cb.execute(makeRequest());
-        await cb.execute(makeRequest());
+        await cb.executeRequest(makeRequest());
+        await cb.executeRequest(makeRequest());
+        await cb.executeRequest(makeRequest());
 
         expect(cb.state, CircuitState.open);
         expect(
-          () => cb.execute(makeRequest()),
+          () => cb.executeRequest(makeRequest()),
           throwsA(isA<CircuitBreakerException>()),
         );
         cb.dispose();
@@ -131,7 +131,7 @@ void main() {
 
         for (int i = 0; i < 3; i++) {
           try {
-            await cb.execute(makeRequest());
+            await cb.executeRequest(makeRequest());
           } on SocketException catch (e) {
             expect(e, isA<SocketException>());
           }
@@ -152,11 +152,11 @@ void main() {
             timeout: const Duration(seconds: 2),
           );
 
-          cb.execute(makeRequest());
+          cb.executeRequest(makeRequest());
           async.flushMicrotasks();
-          cb.execute(makeRequest());
+          cb.executeRequest(makeRequest());
           async.flushMicrotasks();
-          cb.execute(makeRequest());
+          cb.executeRequest(makeRequest());
           async.flushMicrotasks();
 
           expect(cb.state, CircuitState.open);
@@ -183,18 +183,18 @@ void main() {
                 stateChanges.add((prev, next)),
           );
 
-          cb.execute(makeRequest());
+          cb.executeRequest(makeRequest());
           async.flushMicrotasks();
-          cb.execute(makeRequest());
+          cb.executeRequest(makeRequest());
           async.flushMicrotasks();
-          cb.execute(makeRequest());
+          cb.executeRequest(makeRequest());
           async.flushMicrotasks();
 
           expect(cb.state, CircuitState.open);
 
           async.elapse(const Duration(seconds: 3));
 
-          cb.execute(makeRequest());
+          cb.executeRequest(makeRequest());
           async.flushMicrotasks();
 
           expect(cb.state, CircuitState.open);
@@ -222,7 +222,7 @@ void main() {
           );
 
           // 1. Trip it (Fail)
-          testCb.execute(makeRequest());
+          testCb.executeRequest(makeRequest());
           async.flushMicrotasks();
           expect(testCb.state, CircuitState.open);
           expect(testCb.consecutiveOpenings, 1);
@@ -233,13 +233,13 @@ void main() {
 
           // 3. Success 1 in half-open
           responseCode = 200;
-          testCb.execute(makeRequest());
+          testCb.executeRequest(makeRequest());
           async.flushMicrotasks();
           expect(testCb.state, CircuitState.halfOpen);
           expect(testCb.successCount, 1);
 
           // 4. Success 2 in half-open -> should close
-          testCb.execute(makeRequest());
+          testCb.executeRequest(makeRequest());
           async.flushMicrotasks();
           expect(testCb.state, CircuitState.closed);
           expect(testCb.successCount, 0);
@@ -257,9 +257,9 @@ void main() {
           failureThreshold: 3,
         );
 
-        await cb.execute(makeRequest());
-        await cb.execute(makeRequest());
-        await cb.execute(makeRequest());
+        await cb.executeRequest(makeRequest());
+        await cb.executeRequest(makeRequest());
+        await cb.executeRequest(makeRequest());
 
         expect(cb.state, CircuitState.open);
 
@@ -284,11 +284,11 @@ void main() {
           backoffMultiplier: 2.0,
         );
 
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
 
         expect(cb.state, CircuitState.open);
@@ -310,11 +310,11 @@ void main() {
         );
 
         // First opening
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
 
         expect(cb.consecutiveOpenings, 1);
@@ -323,7 +323,7 @@ void main() {
         async.elapse(const Duration(seconds: 3));
 
         // Fail in half-open -> second opening
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
 
         expect(cb.consecutiveOpenings, 2);
@@ -344,15 +344,15 @@ void main() {
         );
 
         // First opening
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
 
         async.elapse(const Duration(seconds: 15));
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
 
         async.elapse(const Duration(seconds: 35));
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
 
         // Should be capped at 30 seconds
@@ -381,13 +381,13 @@ void main() {
         minimumRequestsInWindow: 4,
       );
 
-      await cbSuccess.execute(makeRequest());
-      await cbSuccess.execute(makeRequest());
+      await cbSuccess.executeRequest(makeRequest());
+      await cbSuccess.executeRequest(makeRequest());
 
       // Now 3 failures (60% failure rate)
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
 
       // Note: each circuit breaker has its own sliding window
       expect(cb.requestsInWindow, 3);
@@ -407,9 +407,9 @@ void main() {
       );
 
       // Only 3 failures, not enough for minimum
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
 
       expect(cb.state, CircuitState.closed);
       expect(cb.requestsInWindow, 3);
@@ -427,7 +427,7 @@ void main() {
 
       // Execute many failures
       for (int i = 0; i < 5; i++) {
-        await cb.execute(makeRequest());
+        await cb.executeRequest(makeRequest());
       }
 
       // Should be closed because failureThreshold is 100 and rate threshold is null
@@ -479,10 +479,10 @@ void main() {
         minimumRequestsInWindow: 4,
       );
       
-      await testCb.execute(makeRequest()); // Success (1/1, rate 0%)
-      await testCb.execute(makeRequest()); // Success (2/2, rate 0%)
-      await testCb.execute(makeRequest()); // Failure (1/3, rate 33%)
-      await testCb.execute(makeRequest()); // Failure (2/4, rate 50%)
+      await testCb.executeRequest(makeRequest()); // Success (1/1, rate 0%)
+      await testCb.executeRequest(makeRequest()); // Success (2/2, rate 0%)
+      await testCb.executeRequest(makeRequest()); // Failure (1/3, rate 33%)
+      await testCb.executeRequest(makeRequest()); // Failure (2/4, rate 50%)
       
       expect(testCb.state, CircuitState.open);
       expect(testCb.currentFailureRate, 0.5);
@@ -511,13 +511,13 @@ void main() {
         },
       );
 
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
 
       expect(cb.state, CircuitState.open);
 
-      final StreamedResponse response = await cb.execute(makeRequest());
+      final StreamedResponse response = await cb.executeRequest(makeRequest());
 
       expect(fallbackCalled, isTrue);
       expect(response.statusCode, 200);
@@ -543,7 +543,7 @@ void main() {
         },
       );
 
-      final StreamedResponse response = await cb.execute(makeRequest());
+      final StreamedResponse response = await cb.executeRequest(makeRequest());
 
       expect(fallbackCalled, isTrue);
       expect(response.statusCode, 503);
@@ -564,8 +564,8 @@ void main() {
       );
 
       // Start 2 requests
-      final Future<StreamedResponse> req1 = cb.execute(makeRequest());
-      final Future<StreamedResponse> req2 = cb.execute(makeRequest());
+      final Future<StreamedResponse> req1 = cb.executeRequest(makeRequest());
+      final Future<StreamedResponse> req2 = cb.executeRequest(makeRequest());
 
       // Wait a bit for requests to start
       await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -574,7 +574,7 @@ void main() {
 
       // Third request should be rejected
       expect(
-        () => cb.execute(makeRequest()),
+        () => cb.executeRequest(makeRequest()),
         throwsA(isA<CircuitBreakerException>()),
       );
 
@@ -607,12 +607,12 @@ void main() {
       );
 
       // Start 1 request
-      final Future<StreamedResponse> req1 = cb.execute(makeRequest());
+      final Future<StreamedResponse> req1 = cb.executeRequest(makeRequest());
 
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
       // Second request uses fallback
-      final StreamedResponse response = await cb.execute(makeRequest());
+      final StreamedResponse response = await cb.executeRequest(makeRequest());
 
       expect(fallbackCalled, isTrue);
       expect(response.statusCode, 429);
@@ -630,8 +630,8 @@ void main() {
         failureThreshold: 3,
       );
 
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
 
       expect(cb.metrics.totalRequests, 2);
       expect(cb.metrics.totalSuccesses, 2);
@@ -646,8 +646,8 @@ void main() {
         failureThreshold: 10,
       );
 
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
 
       expect(cb.metrics.totalRequests, 2);
       expect(cb.metrics.totalSuccesses, 0);
@@ -663,12 +663,12 @@ void main() {
         timeout: const Duration(seconds: 10),
       );
 
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
 
       try {
-        await cb.execute(makeRequest());
+        await cb.executeRequest(makeRequest());
       } catch (_) {}
 
       expect(cb.metrics.totalRejected, 1);
@@ -681,7 +681,7 @@ void main() {
         failureThreshold: 3,
       );
 
-      await cb.execute(makeRequest());
+      await cb.executeRequest(makeRequest());
 
       expect(cb.metrics.averageLatency.inMicroseconds, greaterThan(0));
       cb.dispose();
@@ -698,9 +698,9 @@ void main() {
       final List<CircuitBreakerEvent> events = <CircuitBreakerEvent>[];
       cb.events.listen(events.add);
 
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
 
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
@@ -720,7 +720,7 @@ void main() {
       final List<CircuitBreakerEvent> events = <CircuitBreakerEvent>[];
       cb.events.listen(events.add);
 
-      await cb.execute(makeRequest());
+      await cb.executeRequest(makeRequest());
 
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
@@ -737,7 +737,7 @@ void main() {
       final List<CircuitBreakerEvent> events = <CircuitBreakerEvent>[];
       cb.events.listen(events.add);
 
-      await cb.execute(makeRequest());
+      await cb.executeRequest(makeRequest());
 
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
@@ -755,12 +755,12 @@ void main() {
       final List<CircuitBreakerEvent> events = <CircuitBreakerEvent>[];
       cb.events.listen(events.add);
 
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
 
       try {
-        await cb.execute(makeRequest());
+        await cb.executeRequest(makeRequest());
       } catch (_) {}
 
       await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -837,7 +837,7 @@ void main() {
       );
 
       expect(
-        () => cb.execute(makeRequest()),
+        () => cb.executeRequest(makeRequest()),
         throwsA(isA<FormatException>()),
       );
 
@@ -857,7 +857,7 @@ void main() {
           ),
         );
 
-        final Future<StreamedResponse> future = cb.execute(makeRequest());
+        final Future<StreamedResponse> future = cb.executeRequest(makeRequest());
         
         // Attach listener immediately to catch the eventual error
         expect(future, throwsA(isA<SocketException>()));
@@ -938,7 +938,7 @@ void main() {
         ..fields['key'] = 'value'
         ..files.add(MultipartFile.fromString('file', 'content'));
 
-      await cb.execute(originalRequest);
+      await cb.executeRequest(originalRequest);
 
       expect(capturedRequest, isA<MultipartRequest>());
       expect(identical(capturedRequest, originalRequest), isFalse, reason: 'Request should have been cloned');
@@ -956,7 +956,7 @@ void main() {
       });
       
       final CircuitBreaker cb = CircuitBreaker(client: client);
-      await cb.execute(originalRequest);
+      await cb.executeRequest(originalRequest);
       
       expect(identical(capturedRequest, originalRequest), isTrue, reason: 'StreamedRequest should not be cloned');
       cb.dispose();
@@ -974,9 +974,9 @@ void main() {
         key: 'test-cb',
       );
 
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
-      await cb.execute(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
+      await cb.executeRequest(makeRequest());
 
       await cb.saveState();
 
@@ -1159,11 +1159,9 @@ void main() {
   });
 
   group('CircuitBreakerException', () {
-    test('toString includes cause', () {
-      final Request request = Request('GET', Uri.parse('http://example.com'));
+    test('toString includes message', () {
       final CircuitBreakerException exception = CircuitBreakerException(
-        request: request,
-        cause: 'Test cause',
+        'Test cause',
       );
 
       expect(exception.toString(), 'CircuitBreakerException: Test cause');
