@@ -1,43 +1,38 @@
-import 'dart:typed_data';
-
 import 'package:http/http.dart';
+import 'package:http/testing.dart' as http_testing;
 
-class MockClient extends BaseClient {
-  final MockClientStreamHandler _handler;
-
-  MockClient._(this._handler);
-
-  // ignore: sort_unnamed_constructors_first
-  MockClient(MockClientHandler fn)
-      : this._((BaseRequest baseRequest, ByteStream bodyStream) async {
-          final Uint8List bodyBytes = await bodyStream.toBytes();
-          final Request request = Request(baseRequest.method, baseRequest.url)
-            ..persistentConnection = baseRequest.persistentConnection
-            ..followRedirects = baseRequest.followRedirects
-            ..maxRedirects = baseRequest.maxRedirects
-            ..headers.addAll(baseRequest.headers)
-            ..bodyBytes = bodyBytes
-            ..finalize();
-
-          final Response response = await fn(request);
-          return StreamedResponse(
-              ByteStream.fromBytes(response.bodyBytes), response.statusCode,
-              contentLength: response.contentLength,
-              request: baseRequest,
-              headers: response.headers,
-              isRedirect: response.isRedirect,
-              persistentConnection: response.persistentConnection,
-              reasonPhrase: response.reasonPhrase);
-        });
-
-  @override
-  Future<StreamedResponse> send(BaseRequest request) async {
-    final ByteStream bodyStream = request.finalize();
-    return await _handler(request, bodyStream);
-  }
+/// Creates a mock client for testing
+MockClient createMockClient({int statusCode = 200, String body = '{}'}) {
+  return http_testing.MockClient((BaseRequest request) async {
+    return Response(
+      body,
+      statusCode,
+      request: request,
+      headers: <String, String>{'content-type': 'application/json'},
+    );
+  });
 }
 
-typedef MockClientStreamHandler = Future<StreamedResponse> Function(
-    BaseRequest request, ByteStream bodyStream);
+/// Creates a mock client that throws an exception (simulates network failure)
+MockClient createFailingMockClient(Exception exception) {
+  return http_testing.MockClient((BaseRequest request) async {
+    throw exception;
+  });
+}
 
-typedef MockClientHandler = Future<Response> Function(Request request);
+/// Creates a mock client that waits for a future to complete
+MockClient createDelayedMockClient(Future<Response> futureResponse) {
+  return http_testing.MockClient((BaseRequest request) async {
+    return futureResponse;
+  });
+}
+
+/// Creates a mock client that calls a function for each request
+MockClient createCountingMockClient(Response Function() handler) {
+  return http_testing.MockClient((BaseRequest request) async {
+    return handler();
+  });
+}
+
+/// Type alias for MockClient
+typedef MockClient = http_testing.MockClient;

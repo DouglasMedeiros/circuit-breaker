@@ -1,3 +1,13 @@
+## 2.0.0
+
+* **Breaking Change**: Complete architectural rewrite using Domain-Driven Design principles.
+* **New Feature**: Added `CircuitBreakerEvents` for detailed monitoring and logging.
+* **New Feature**: Implemented `SlidingWindow` metrics for accurate failure rate tracking.
+* **New Feature**: Added flexible `RetryPolicy` configuration.
+* **New Feature**: Introduced `CircuitBreakerStorage` with in-memory and JSON persistence support.
+* **Documentation**: Major update to `README.md` with detailed usage guides and architecture overview.
+* **Tests**: Added comprehensive unit tests covering all new components.
+
 ## 1.0.3
 
 * Update lint
@@ -12,7 +22,6 @@
 
 * Clone request
 * Add example
-
 
 ## 1.0.0
 
