@@ -27,13 +27,14 @@ typedef FallbackCallback = Future<StreamedResponse> Function(
 /// Callback type for health check function
 typedef HealthCheckCallback = Future<bool> Function();
 
-/// Implementation of the Circuit Breaker design pattern for HTTP requests.
+/// Implementation of the Circuit Breaker design pattern.
 ///
-/// The circuit breaker monitors HTTP requests and automatically opens
+/// The circuit breaker monitors requests (HTTP or generic functions) and automatically opens
 /// (blocks requests) when failures exceed a threshold, allowing the
 /// downstream service time to recover.
 ///
 /// Features:
+/// - Support for HTTP requests and generic asynchronous functions
 /// - Exponential backoff for recovery timeouts
 /// - Sliding window for failure rate calculation
 /// - Health check support
@@ -320,11 +321,101 @@ class CircuitBreaker {
   bool get _canAttemptRecovery =>
       _nextAttempt.millisecondsSinceEpoch <= clock.now().millisecondsSinceEpoch;
 
+  /// Executes a generic asynchronous function through the circuit breaker.
+  Future<T> execute<T>(
+    Future<T> Function() function, {
+    Future<T> Function(Object error)? fallback,
+  }) async {
+    // Check bulkhead limit
+    if (maxConcurrentRequests > 0 && _pendingRequests >= maxConcurrentRequests) {
+      _metrics.recordRejected();
+      _emitEvent(() => RequestRejectedEvent(url: null, nextAttempt: clock.now()));
+
+      if (fallback != null) {
+        _metrics.recordFallback();
+        _emitEvent(() => FallbackUsedEvent(originalError: 'Max concurrent requests exceeded'));
+        return fallback('Max concurrent requests exceeded');
+      }
+
+      throw CircuitBreakerBulkheadException('Max concurrent requests ($maxConcurrentRequests) exceeded',limit: maxConcurrentRequests);
+    }
+
+    // Check circuit state
+    if (_state == CircuitState.open) {
+      if (_canAttemptRecovery) {
+        _transitionTo(CircuitState.halfOpen);
+      } else {
+        _metrics.recordRejected();
+        _emitEvent(() => RequestRejectedEvent(url: null, nextAttempt: _nextAttempt));
+
+        if (fallback != null) {
+          _metrics.recordFallback();
+          _emitEvent(() => FallbackUsedEvent(originalError: 'Circuit open'));
+          return fallback('Circuit open');
+        }
+
+        throw CircuitBreakerOpenException('Circuit suspended. Retry after $nextAttempt', nextAttempt: _nextAttempt);
+      }
+    }
+
+    _pendingRequests++;
+    final DateTime startTime = clock.now();
+
+    try {
+      final T result = await _executeFunctionWithRetry(function);
+      final Duration duration = clock.now().difference(startTime);
+
+      _onSuccess(duration);
+
+      return result;
+    } catch (e) {
+      final Duration duration = clock.now().difference(startTime);
+      _onFailure(duration, error: e);
+
+      if (fallback != null) {
+        _metrics.recordFallback();
+        _emitEvent(() => FallbackUsedEvent(originalError: e));
+        return fallback(e);
+      }
+
+      rethrow;
+    } finally {
+      _pendingRequests--;
+    }
+  }
+
+  Future<T> _executeFunctionWithRetry<T>(Future<T> Function() function) async {
+    int attempt = 0;
+
+    while (true) {
+      try {
+        return await function();
+      } catch (e) {
+        if (attempt < retryPolicy.maxRetries &&
+            retryPolicy.shouldRetryForException(e)) {
+          attempt++;
+
+          _metrics.recordRetry();
+
+          _emitEvent(() => RequestRetryEvent(attempt: attempt, maxRetries: retryPolicy.maxRetries, error: e));
+
+          final Duration delay = retryPolicy.getDelayForAttempt(attempt);
+
+          await Future<void>.delayed(delay);
+
+          continue;
+        }
+
+        rethrow;
+      }
+    }
+  }
+
   /// Executes an HTTP request through the circuit breaker.
   ///
   /// Throws [CircuitBreakerException] if the circuit is open and
   /// the timeout has not elapsed and no fallback is configured.
-  Future<StreamedResponse> execute(BaseRequest request) async {
+  Future<StreamedResponse> executeRequest(BaseRequest request) async {
     // Check bulkhead limit
     if (maxConcurrentRequests > 0 &&
         _pendingRequests >= maxConcurrentRequests) {
@@ -339,9 +430,9 @@ class CircuitBreaker {
         return fallback!(request, 'Max concurrent requests exceeded');
       }
 
-      throw CircuitBreakerException(
-        request: request,
-        cause: 'Max concurrent requests ($maxConcurrentRequests) exceeded',
+      throw CircuitBreakerBulkheadException(
+        'Max concurrent requests ($maxConcurrentRequests) exceeded',
+        limit: maxConcurrentRequests,
       );
     }
 
@@ -362,9 +453,9 @@ class CircuitBreaker {
           return fallback!(request, 'Circuit open');
         }
 
-        throw CircuitBreakerException(
-          request: request,
-          cause: 'Circuit suspended (${request.url}). Retry after $nextAttempt',
+        throw CircuitBreakerOpenException(
+          'Circuit suspended (${request.url}). Retry after $nextAttempt',
+          nextAttempt: _nextAttempt,
         );
       }
     }
@@ -377,7 +468,7 @@ class CircuitBreaker {
       final Duration duration = clock.now().difference(startTime);
 
       if (response.statusCode >= 200 && response.statusCode <= 299) {
-        _onSuccess(duration, response.statusCode);
+        _onSuccess(duration, statusCode: response.statusCode);
       } else {
         _onFailure(duration, statusCode: response.statusCode);
       }
@@ -391,6 +482,18 @@ class CircuitBreaker {
         _metrics.recordFallback();
         _emitEvent(() => FallbackUsedEvent(originalError: e));
         return fallback!(request, e);
+      }
+
+      if (e is TimeoutException) {
+        throw CircuitBreakerTimeoutException(
+          'Request timed out',
+          timeout: requestTimeout,
+        );
+      } else if (e is ClientException) {
+        throw CircuitBreakerNetworkException(
+          'Network error: ${e.message}',
+          originalError: e,
+        );
       }
 
       rethrow;
@@ -543,7 +646,7 @@ class CircuitBreaker {
     }
   }
 
-  void _onSuccess(Duration latency, int statusCode) {
+  void _onSuccess(Duration latency, {int? statusCode}) {
     _failureCount = 0;
     _slidingWindow.recordSuccess();
     _metrics.recordSuccess(latency);

@@ -29,7 +29,7 @@ void main() {
         );
 
         // Open the circuit
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
         expect(cb.state, CircuitState.open);
 
@@ -60,7 +60,7 @@ void main() {
           healthCheckInterval: const Duration(seconds: 5),
         );
 
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
         expect(cb.state, CircuitState.open);
 
@@ -89,7 +89,7 @@ void main() {
           healthCheckInterval: const Duration(seconds: 5),
         );
 
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
         expect(cb.state, CircuitState.open);
 
@@ -112,7 +112,7 @@ void main() {
           healthCheckInterval: const Duration(seconds: 5),
         );
 
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
         expect(cb.state, CircuitState.open);
 
@@ -134,7 +134,7 @@ void main() {
           healthCheckInterval: const Duration(seconds: 5),
         );
 
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
         expect(cb.state, CircuitState.open);
 
@@ -159,7 +159,7 @@ void main() {
         final List<CircuitBreakerEvent> events = <CircuitBreakerEvent>[];
         cb.events.listen(events.add);
 
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
 
         async.elapse(const Duration(seconds: 5));
@@ -186,7 +186,7 @@ void main() {
         final List<CircuitBreakerEvent> events = <CircuitBreakerEvent>[];
         cb.events.listen(events.add);
 
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
 
         async.elapse(const Duration(seconds: 5));
@@ -254,7 +254,7 @@ void main() {
         );
 
         // Trip to Open -> starts health check
-        cb.execute(makeRequest());
+        cb.executeRequest(makeRequest());
         async.flushMicrotasks();
         expect(cb.state, CircuitState.open);
 

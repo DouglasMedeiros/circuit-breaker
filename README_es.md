@@ -1,36 +1,36 @@
 # circuit_breaker
 
-[Portuguese Brazil](README_pt-BR.md) | [Spanish](README_es.md)
+[Portugués Brasileño](README_pt-BR.md) | [Inglés](README.md) 
 
-Implementation of the Circuit Breaker design pattern in Dart.
+Implementación del patrón de diseño Circuit Breaker (Cortacircuitos) en Dart.
 
-**Version:** 2.0.0 · **License:** See LICENSE
+**Versión:** 2.0.0 · **Licencia:** Ver LICENSE
 
 [![pub package](https://img.shields.io/pub/v/circuit_breaker.svg)](https://pub.dev/packages/circuit_breaker)
 [![Build Status](https://github.com/DouglasMedeiros/circuit-breaker/workflows/Dart%20CI/badge.svg)](https://github.com/DouglasMedeiros/circuit-breaker/actions?query=workflow%3A"Dart+CI"+branch%3Amaster)
 ![GitHub top language](https://img.shields.io/github/languages/top/DouglasMedeiros/circuit-breaker)
 
-## Why this project
+## Por qué este proyecto
 
-- Protects downstream services by automatically tripping when error rates rise.
-- Supports sliding-window failure rates, exponential backoff, health checks, fallbacks, retries, and basic persistence.
-- Small, dependency-light library that integrates with `package:http`.
+- Protege los servicios posteriores (downstream) disparándose automáticamente cuando aumentan las tasas de error.
+- Soporta tasas de fallo con ventana deslizante (sliding-window), retroceso exponencial (exponential backoff), comprobaciones de salud (health checks), fallbacks, reintentos y persistencia básica.
+- Biblioteca pequeña y con pocas dependencias que se integra con `package:http`.
 
-## Features
+## Características
 
-- Circuit states: `closed`, `open`, `halfOpen`
-- Sliding window failure-rate detection
-- Exponential backoff for recovery timeouts
-- Optional health checks and fallback handlers
-- Retry policies and concurrency limiting (bulkhead)
-- Metrics and event stream for monitoring
-- Pluggable storage via `CircuitBreakerStorage` (in-memory and JSON helpers included)
+- Estados del circuito: `closed` (cerrado), `open` (abierto), `halfOpen` (medio abierto)
+- Detección de tasa de fallos con ventana deslizante
+- Retroceso exponencial para tiempos de espera de recuperación
+- Comprobaciones de salud opcionales y manejadores de fallback
+- Políticas de reintento y límite de concurrencia (bulkhead)
+- Métricas y flujo de eventos para monitoreo
+- Almacenamiento conectable vía `CircuitBreakerStorage` (se incluyen ayudantes en memoria y JSON)
 
-## Getting started
+## Comenzando
 
-Prerequisites: Dart SDK 3.0+ (see `pubspec.yaml`).
+Prerrequisitos: Dart SDK 3.0+ (ver `pubspec.yaml`).
 
-### Quick example
+### Ejemplo rápido
 
 ```dart
 Future<void> genericExecuteExample() async {
@@ -98,7 +98,7 @@ Future<void> main() async {
 }
 ```
 
-### Using a fallback
+### Usando un fallback
 
 ```dart
 import 'dart:convert';
@@ -126,36 +126,36 @@ Future<void> main() async {
 }
 ```
 
-### More examples
+### Más ejemplos
 
-For more examples see: `example/main.dart`
+Para más ejemplos ver: `example/main.dart`
 
-## API surface
+## Superficie de la API
 
-Primary entry points are in the library barrel: `lib/circuit_breaker.dart`. Key types:
+Los principales puntos de entrada están en el archivo barril de la biblioteca: `lib/circuit_breaker.dart`. Tipos clave:
 
-- `CircuitBreaker` — main class to create/lookup breakers (`forHost`, `forEndpoint`)
+- `CircuitBreaker` — clase principal para crear/buscar cortacircuitos (`forHost`, `forEndpoint`)
 - `FallbackCallback`, `HealthCheckCallback`, `StateChangeCallback`
 - `RetryPolicy`, `CircuitBreakerMetrics`, `CircuitState`, `CircuitBreakerStorage`
 
-See the `lib/src/` sources for implementation and examples of advanced options.
+Ver las fuentes en `lib/src/` para implementación y ejemplos de opciones avanzadas.
 
-## Where to get help
+## Dónde obtener ayuda
 
-- Open an issue: https://github.com/DouglasMedeiros/circuit-breaker/issues
-- Read source files in `lib/src/` for usage examples and behavior
+- Abre un issue: https://github.com/DouglasMedeiros/circuit-breaker/issues
+- Lee los archivos fuente en `lib/src/` para ejemplos de uso y comportamiento
 
-## Maintainers & Contributing
+## Mantenedores y Contribución
 
-- Maintainer: DouglasMedeiros — see repository homepage in `pubspec.yaml`
-- Want to contribute? Please open an issue or PR. Add tests and follow existing code style.
+- Mantenedor: DouglasMedeiros — ver la página de inicio del repositorio en `pubspec.yaml`
+- ¿Quieres contribuir? Por favor, abre un issue o PR. Añade pruebas y sigue el estilo de código existente.
 
-If you plan large changes, open an issue first to discuss the design.
+Si planeas grandes cambios, abre un issue primero para discutir el diseño.
 
-## License
+## Licencia
 
-This project is available under the terms in the `LICENSE` file in this repository.
+Este proyecto está disponible bajo los términos en el archivo `LICENSE` en este repositorio.
 
 ---
 
-Small, focused library to make HTTP calls safer and more resilient. For detailed API docs, consult the source in `lib/src/` and the tests in `test/` for usage patterns.
+Biblioteca pequeña y enfocada para hacer llamadas HTTP más seguras y resilientes. Para documentación detallada de la API, consulta el código fuente en `lib/src/` y las pruebas en `test/` para patrones de uso.
