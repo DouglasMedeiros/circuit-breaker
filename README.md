@@ -4,7 +4,7 @@
 
 Implementation of the Circuit Breaker design pattern in Dart.
 
-**Version:** 2.0.0 · **License:** See LICENSE
+**Version:** 3.0.1 · **License:** See LICENSE
 
 [![pub package](https://img.shields.io/pub/v/circuit_breaker.svg)](https://pub.dev/packages/circuit_breaker)
 [![Build Status](https://github.com/DouglasMedeiros/circuit-breaker/workflows/Dart%20CI/badge.svg)](https://github.com/DouglasMedeiros/circuit-breaker/actions?query=workflow%3A"Dart+CI"+branch%3Amaster)

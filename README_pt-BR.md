@@ -4,7 +4,7 @@
 
 Implementação do padrão de design Circuit Breaker (Disjuntor) em Dart.
 
-**Versão:** 2.0.0 · **Licença:** Veja LICENSE
+**Versão:** 3.0.1 · **Licença:** Veja LICENSE
 
 [![pub package](https://img.shields.io/pub/v/circuit_breaker.svg)](https://pub.dev/packages/circuit_breaker)
 [![Build Status](https://github.com/DouglasMedeiros/circuit-breaker/workflows/Dart%20CI/badge.svg)](https://github.com/DouglasMedeiros/circuit-breaker/actions?query=workflow%3A"Dart+CI"+branch%3Amaster)
