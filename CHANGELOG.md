@@ -1,3 +1,16 @@
+## 3.0.0
+
+* **Breaking Change**: Renamed `execute` method to `executeRequest` for HTTP requests to distinguish from the new generic execution method.
+* **New Feature**: Added `execute<T>` method to support generic asynchronous functions, allowing the circuit breaker to be used for non-HTTP operations.
+* **Refactor**: Improved exception handling with a new hierarchy:
+  * `CircuitBreakerException` (Base class)
+  * `CircuitBreakerOpenException`
+  * `CircuitBreakerTimeoutException`
+  * `CircuitBreakerBulkheadException`
+  * `CircuitBreakerNetworkException`
+* **Refactor**: Updated `CircuitBreakerEvent` classes to support generic execution (optional `url` and `statusCode`).
+* **Documentation**: Added examples for exception handling and generic execution.
+
 ## 2.0.0
 
 * **Breaking Change**: Complete architectural rewrite using Domain-Driven Design principles.
