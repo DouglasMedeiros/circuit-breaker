@@ -1,6 +1,6 @@
 name: circuit_breaker
-description: Implementation of the Circuit Breaker Design Pattern for HTTP requests
-version: 2.0.0
+description: Implementation of the Circuit Breaker Design Pattern
+version: 3.0.1
 homepage: https://github.com/DouglasMedeiros/circuit-breaker
 repository: https://github.com/DouglasMedeiros/circuit-breaker
 issue_tracker: https://github.com/DouglasMedeiros/circuit-breaker/issues

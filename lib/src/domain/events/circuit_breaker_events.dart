@@ -30,14 +30,14 @@ class StateChangedEvent extends CircuitBreakerEvent {
 /// Event emitted when a request succeeds
 class RequestSuccessEvent extends CircuitBreakerEvent {
   /// HTTP status code of the response
-  final int statusCode;
+  final int? statusCode;
 
   /// Duration of the request
   final Duration duration;
 
   /// Creates a new request success event
   RequestSuccessEvent({
-    required this.statusCode,
+    this.statusCode,
     required this.duration,
   });
 
@@ -72,14 +72,14 @@ class RequestFailureEvent extends CircuitBreakerEvent {
 /// Event emitted when a request is rejected due to open circuit
 class RequestRejectedEvent extends CircuitBreakerEvent {
   /// URL that was rejected
-  final Uri url;
+  final Uri? url;
 
   /// When the circuit will allow the next attempt
   final DateTime nextAttempt;
 
   /// Creates a new request rejected event
   RequestRejectedEvent({
-    required this.url,
+    this.url,
     required this.nextAttempt,
   });
 
