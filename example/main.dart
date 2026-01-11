@@ -225,37 +225,3 @@ Future<void> main() async {
 
   print('\nAll examples finished.');
 }
-
-// import 'package:circuit_breaker/circuit_breaker.dart';
-// import 'package:http/http.dart';
-
-// Future<void> main() async {
-//   // Create a circuit breaker
-//   final CircuitBreaker cb = CircuitBreaker(
-//     failureThreshold: 3,
-//     successThreshold: 2,
-//     timeout: const Duration(seconds: 5),
-//     onStateChange: (CircuitState prev, CircuitState next) {
-//       print('State changed: $prev -> $next');
-//     },
-//   );
-
-//   // Create a request
-//   final Request request = Request('POST', Uri.parse('http://example.com'));
-//   request.bodyFields = <String, String>{'data': 'abc123'};
-
-//   // Execute with circuit breaker protection
-//   try {
-//     final StreamedResponse response = await cb.execute(request);
-//     print('Success: ${response.statusCode}');
-//   } on CircuitBreakerException catch (e) {
-//     print('Circuit is open: $e');
-//   }
-
-//   // Check circuit state
-//   print('Current state: ${cb.state}');
-//   print('Is allowing requests: ${cb.isAllowingRequests}');
-
-//   // Reset if needed
-//   cb.reset();
-// }
