@@ -166,8 +166,6 @@ class CircuitBreaker {
       windowDuration ?? const Duration(seconds: 60),
     );
     _stateController = _StateController(
-      failureThreshold: failureThreshold,
-      successThreshold: successThreshold,
       timeout: timeout,
       useExponentialBackoff: useExponentialBackoff,
       backoffMultiplier: backoffMultiplier,
@@ -379,7 +377,7 @@ class CircuitBreaker {
       final T result = await _executor.executeFunctionWithRetry(
         function,
         onRetry: () => _metricsManager.recordRetry(),
-        onRetryEvent: (attempt, maxRetries, error) {
+        onRetryEvent: (int attempt, int maxRetries, Object error) {
           _emitEvent(() => RequestRetryEvent(
               attempt: attempt, maxRetries: maxRetries, error: error));
         },
@@ -460,7 +458,7 @@ class CircuitBreaker {
       final StreamedResponse response = await _executor.executeWithRetry(
         request,
         onRetry: () => _metricsManager.recordRetry(),
-        onRetryEvent: (attempt, maxRetries, error) {
+        onRetryEvent: (int attempt, int maxRetries, Object error) {
           _emitEvent(() => RequestRetryEvent(
               attempt: attempt, maxRetries: maxRetries, error: error));
         },
@@ -558,7 +556,7 @@ class CircuitBreaker {
   void _transitionTo(CircuitState newState) {
     _stateController.transitionTo(
       newState,
-      onTransition: (previousState, newState) {
+      onTransition: (CircuitState previousState, CircuitState newState) {
         _emitEvent(() => StateChangedEvent(
               previousState: previousState,
               newState: newState,
@@ -587,7 +585,9 @@ class CircuitBreaker {
 
     if (state == CircuitState.halfOpen) {
       if (successCount >= successThreshold) {
-        _stateController.reset(); // Reset counters and transition to closed
+        // Successfully recovered, reset all counters including backoff
+        _stateController.resetCounters();
+        _stateController.resetConsecutiveOpenings();
         _transitionTo(CircuitState.closed);
       }
     }
@@ -647,7 +647,7 @@ class CircuitBreaker {
   Future<void> _performHealthCheck() async {
     await _healthCheckMonitor.performHealthCheck(
       currentState: state,
-      onEvent: (isHealthy, duration) {
+      onEvent: (bool isHealthy, Duration duration) {
         _emitEvent(() => HealthCheckEvent(
               isHealthy: isHealthy,
               duration: duration,
@@ -702,16 +702,12 @@ class _StateController {
   int _consecutiveOpenings = 0;
   DateTime _nextAttempt = clock.now();
 
-  final int failureThreshold;
-  final int successThreshold;
   final Duration timeout;
   final bool useExponentialBackoff;
   final double backoffMultiplier;
   final Duration maxTimeout;
 
   _StateController({
-    required this.failureThreshold,
-    required this.successThreshold,
     required this.timeout,
     required this.useExponentialBackoff,
     required this.backoffMultiplier,
@@ -755,10 +751,21 @@ class _StateController {
     _nextAttempt = clock.now().add(_calculateRecoveryTimeout());
   }
 
-  void reset() {
+  /// Resets failure and success counters.
+  void resetCounters() {
     _failureCount = 0;
     _successCount = 0;
+  }
+
+  /// Resets the consecutive openings counter used for exponential backoff.
+  void resetConsecutiveOpenings() {
     _consecutiveOpenings = 0;
+  }
+
+  /// Performs a full reset of the state controller.
+  void reset() {
+    resetCounters();
+    resetConsecutiveOpenings();
   }
 
   Duration _calculateRecoveryTimeout() {
