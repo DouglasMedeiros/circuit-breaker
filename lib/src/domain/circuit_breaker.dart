@@ -690,7 +690,10 @@ class _MetricsManager {
 
   double get failureRate => _slidingWindow.failureRate;
   int get totalCount => _slidingWindow.totalCount;
-  void clear() => _slidingWindow.clear();
+  void clear() {
+    _slidingWindow.clear();
+    _metrics.reset();
+  }
   CircuitBreakerMetrics get metrics => _metrics;
 }
 
