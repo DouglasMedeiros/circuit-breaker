@@ -51,18 +51,10 @@ class CircuitBreaker {
   /// HTTP client used to send requests
   final Client _client;
 
-  CircuitState _state = CircuitState.closed;
-  int _failureCount = 0;
-  int _successCount = 0;
-  int _consecutiveOpenings = 0;
-  DateTime _nextAttempt = clock.now();
-  int _pendingRequests = 0;
+  late final _StateController _stateController;
+  late final _RequestExecutor _executor;
 
-  // Sliding window for failure rate calculation
-  late final SlidingWindow _slidingWindow;
-
-  // Metrics tracking
-  final CircuitBreakerMetrics _metrics = CircuitBreakerMetrics();
+  late final _MetricsManager _metricsManager;
 
   // Event stream
   final StreamController<CircuitBreakerEvent> _eventController =
@@ -138,7 +130,7 @@ class CircuitBreaker {
   /// Unique key for this circuit breaker (used for persistence and registry)
   final String? key;
 
-  Timer? _healthCheckTimer;
+  late final _HealthCheckMonitor _healthCheckMonitor;
 
   /// Creates a new [CircuitBreaker] instance.
   CircuitBreaker({
@@ -170,8 +162,24 @@ class CircuitBreaker {
     this.storage,
     this.key,
   }) : _client = client ?? Client() {
-    _slidingWindow = SlidingWindow(
+    _metricsManager = _MetricsManager(
       windowDuration ?? const Duration(seconds: 60),
+    );
+    _stateController = _StateController(
+      timeout: timeout,
+      useExponentialBackoff: useExponentialBackoff,
+      backoffMultiplier: backoffMultiplier,
+      maxTimeout: maxTimeout,
+    );
+    _executor = _RequestExecutor(
+      client: _client,
+      requestTimeout: requestTimeout,
+      maxConcurrentRequests: maxConcurrentRequests,
+      retryPolicy: retryPolicy,
+    );
+    _healthCheckMonitor = _HealthCheckMonitor(
+      healthCheck: healthCheck,
+      healthCheckInterval: healthCheckInterval,
     );
   }
 
@@ -285,41 +293,38 @@ class CircuitBreaker {
   static CircuitBreaker? getByKey(String key) => _registry[key];
 
   /// Current state of the circuit breaker
-  CircuitState get state => _state;
+  CircuitState get state => _stateController.state;
 
   /// When the circuit will attempt recovery (only relevant when open)
-  DateTime get nextAttempt => _nextAttempt;
+  DateTime get nextAttempt => _stateController.nextAttempt;
 
   /// Current failure count
-  int get failureCount => _failureCount;
+  int get failureCount => _stateController.failureCount;
 
   /// Current success count (relevant in half-open state)
-  int get successCount => _successCount;
+  int get successCount => _stateController.successCount;
 
   /// Number of times the circuit has opened consecutively
-  int get consecutiveOpenings => _consecutiveOpenings;
+  int get consecutiveOpenings => _stateController.consecutiveOpenings;
 
   /// Number of requests currently in progress
-  int get pendingRequests => _pendingRequests;
+  int get pendingRequests => _executor.pendingRequests;
 
   /// Whether the circuit is allowing requests
   bool get isAllowingRequests =>
-      _state != CircuitState.open || _canAttemptRecovery;
+      state != CircuitState.open || _stateController.canAttemptRecovery;
 
   /// Metrics for this circuit breaker
-  CircuitBreakerMetrics get metrics => _metrics;
+  CircuitBreakerMetrics get metrics => _metricsManager.metrics;
 
   /// Stream of circuit breaker events
   Stream<CircuitBreakerEvent> get events => _eventController.stream;
 
   /// Current failure rate from sliding window
-  double get currentFailureRate => _slidingWindow.failureRate;
+  double get currentFailureRate => _metricsManager.failureRate;
 
   /// Total requests in sliding window
-  int get requestsInWindow => _slidingWindow.totalCount;
-
-  bool get _canAttemptRecovery =>
-      _nextAttempt.millisecondsSinceEpoch <= clock.now().millisecondsSinceEpoch;
+  int get requestsInWindow => _metricsManager.totalCount;
 
   /// Executes a generic asynchronous function through the circuit breaker.
   Future<T> execute<T>(
@@ -327,42 +332,56 @@ class CircuitBreaker {
     Future<T> Function(Object error)? fallback,
   }) async {
     // Check bulkhead limit
-    if (maxConcurrentRequests > 0 && _pendingRequests >= maxConcurrentRequests) {
-      _metrics.recordRejected();
-      _emitEvent(() => RequestRejectedEvent(url: null, nextAttempt: clock.now()));
+    if (maxConcurrentRequests > 0 && pendingRequests >= maxConcurrentRequests) {
+      _metricsManager.recordRejected();
+      _emitEvent(
+          () => RequestRejectedEvent(url: null, nextAttempt: clock.now()));
 
       if (fallback != null) {
-        _metrics.recordFallback();
-        _emitEvent(() => FallbackUsedEvent(originalError: 'Max concurrent requests exceeded'));
+        _metricsManager.recordFallback();
+        _emitEvent(() => FallbackUsedEvent(
+            originalError: 'Max concurrent requests exceeded'));
         return fallback('Max concurrent requests exceeded');
       }
 
-      throw CircuitBreakerBulkheadException('Max concurrent requests ($maxConcurrentRequests) exceeded',limit: maxConcurrentRequests);
+      throw CircuitBreakerBulkheadException(
+          'Max concurrent requests ($maxConcurrentRequests) exceeded',
+          limit: maxConcurrentRequests);
     }
 
     // Check circuit state
-    if (_state == CircuitState.open) {
-      if (_canAttemptRecovery) {
+    if (state == CircuitState.open) {
+      if (_stateController.canAttemptRecovery) {
         _transitionTo(CircuitState.halfOpen);
       } else {
-        _metrics.recordRejected();
-        _emitEvent(() => RequestRejectedEvent(url: null, nextAttempt: _nextAttempt));
+        _metricsManager.recordRejected();
+        _emitEvent(
+            () => RequestRejectedEvent(url: null, nextAttempt: nextAttempt));
 
         if (fallback != null) {
-          _metrics.recordFallback();
+          _metricsManager.recordFallback();
           _emitEvent(() => FallbackUsedEvent(originalError: 'Circuit open'));
           return fallback('Circuit open');
         }
 
-        throw CircuitBreakerOpenException('Circuit suspended. Retry after $nextAttempt', nextAttempt: _nextAttempt);
+        throw CircuitBreakerOpenException(
+            'Circuit suspended. Retry after $nextAttempt',
+            nextAttempt: nextAttempt);
       }
     }
 
-    _pendingRequests++;
+    _executor.incrementPending();
     final DateTime startTime = clock.now();
 
     try {
-      final T result = await _executeFunctionWithRetry(function);
+      final T result = await _executor.executeFunctionWithRetry(
+        function,
+        onRetry: () => _metricsManager.recordRetry(),
+        onRetryEvent: (int attempt, int maxRetries, Object error) {
+          _emitEvent(() => RequestRetryEvent(
+              attempt: attempt, maxRetries: maxRetries, error: error));
+        },
+      );
       final Duration duration = clock.now().difference(startTime);
 
       _onSuccess(duration);
@@ -373,41 +392,14 @@ class CircuitBreaker {
       _onFailure(duration, error: e);
 
       if (fallback != null) {
-        _metrics.recordFallback();
+        _metricsManager.recordFallback();
         _emitEvent(() => FallbackUsedEvent(originalError: e));
         return fallback(e);
       }
 
       rethrow;
     } finally {
-      _pendingRequests--;
-    }
-  }
-
-  Future<T> _executeFunctionWithRetry<T>(Future<T> Function() function) async {
-    int attempt = 0;
-
-    while (true) {
-      try {
-        return await function();
-      } catch (e) {
-        if (attempt < retryPolicy.maxRetries &&
-            retryPolicy.shouldRetryForException(e)) {
-          attempt++;
-
-          _metrics.recordRetry();
-
-          _emitEvent(() => RequestRetryEvent(attempt: attempt, maxRetries: retryPolicy.maxRetries, error: e));
-
-          final Duration delay = retryPolicy.getDelayForAttempt(attempt);
-
-          await Future<void>.delayed(delay);
-
-          continue;
-        }
-
-        rethrow;
-      }
+      _executor.decrementPending();
     }
   }
 
@@ -417,13 +409,12 @@ class CircuitBreaker {
   /// the timeout has not elapsed and no fallback is configured.
   Future<StreamedResponse> executeRequest(BaseRequest request) async {
     // Check bulkhead limit
-    if (maxConcurrentRequests > 0 &&
-        _pendingRequests >= maxConcurrentRequests) {
-      _metrics.recordRejected();
+    if (maxConcurrentRequests > 0 && pendingRequests >= maxConcurrentRequests) {
+      _metricsManager.recordRejected();
       _emitEvent(() => RequestRejectedEvent(url: request.url, nextAttempt: clock.now()));
 
       if (fallback != null) {
-        _metrics.recordFallback();
+        _metricsManager.recordFallback();
         _emitEvent(() => FallbackUsedEvent(
               originalError: 'Max concurrent requests exceeded',
             ));
@@ -437,34 +428,41 @@ class CircuitBreaker {
     }
 
     // Check circuit state
-    if (_state == CircuitState.open) {
-      if (_canAttemptRecovery) {
+    if (state == CircuitState.open) {
+      if (_stateController.canAttemptRecovery) {
         _transitionTo(CircuitState.halfOpen);
       } else {
-        _metrics.recordRejected();
+        _metricsManager.recordRejected();
         _emitEvent(() => RequestRejectedEvent(
               url: request.url,
-              nextAttempt: _nextAttempt,
+              nextAttempt: nextAttempt,
             ));
 
         if (fallback != null) {
-          _metrics.recordFallback();
+          _metricsManager.recordFallback();
           _emitEvent(() => FallbackUsedEvent(originalError: 'Circuit open'));
           return fallback!(request, 'Circuit open');
         }
 
         throw CircuitBreakerOpenException(
           'Circuit suspended (${request.url}). Retry after $nextAttempt',
-          nextAttempt: _nextAttempt,
+          nextAttempt: nextAttempt,
         );
       }
     }
 
-    _pendingRequests++;
+    _executor.incrementPending();
     final DateTime startTime = clock.now();
 
     try {
-      final StreamedResponse response = await _executeWithRetry(request);
+      final StreamedResponse response = await _executor.executeWithRetry(
+        request,
+        onRetry: () => _metricsManager.recordRetry(),
+        onRetryEvent: (int attempt, int maxRetries, Object error) {
+          _emitEvent(() => RequestRetryEvent(
+              attempt: attempt, maxRetries: maxRetries, error: error));
+        },
+      );
       final Duration duration = clock.now().difference(startTime);
 
       if (response.statusCode >= 200 && response.statusCode <= 299) {
@@ -479,7 +477,7 @@ class CircuitBreaker {
       _onFailure(duration, error: e);
 
       if (fallback != null) {
-        _metrics.recordFallback();
+        _metricsManager.recordFallback();
         _emitEvent(() => FallbackUsedEvent(originalError: e));
         return fallback!(request, e);
       }
@@ -498,11 +496,360 @@ class CircuitBreaker {
 
       rethrow;
     } finally {
-      _pendingRequests--;
+      _executor.decrementPending();
     }
   }
 
-  Future<StreamedResponse> _executeWithRetry(BaseRequest request) async {
+  /// Resets the circuit breaker to its initial closed state.
+  void reset() {
+    _stateController.reset();
+    _metricsManager.clear();
+    _stopHealthCheck();
+    _transitionTo(CircuitState.closed);
+  }
+
+  /// Saves the current state to storage
+  Future<void> saveState() async {
+    if (storage == null || key == null) {
+      return;
+    }
+
+    final CircuitBreakerState savedState = CircuitBreakerState(
+      state: state,
+      failureCount: failureCount,
+      successCount: successCount,
+      nextAttempt: nextAttempt,
+      savedAt: clock.now(),
+      consecutiveOpenings: consecutiveOpenings,
+    );
+
+    await storage!.save(key!, savedState);
+  }
+
+  /// Restores state from storage
+  Future<bool> restoreState() async {
+    if (storage == null || key == null) {
+      return false;
+    }
+
+    final CircuitBreakerState? savedState = await storage!.load(key!);
+    if (savedState == null) {
+      return false;
+    }
+
+    _stateController.restore(savedState);
+
+    // Start health check if circuit is open
+    if (state == CircuitState.open && healthCheck != null) {
+      _startHealthCheck();
+    }
+
+    return true;
+  }
+
+  /// Disposes resources used by this circuit breaker
+  void dispose() {
+    _stopHealthCheck();
+    _eventController.close();
+  }
+
+  void _transitionTo(CircuitState newState) {
+    _stateController.transitionTo(
+      newState,
+      onTransition: (CircuitState previousState, CircuitState newState) {
+        _emitEvent(() => StateChangedEvent(
+              previousState: previousState,
+              newState: newState,
+            ));
+
+        onStateChange?.call(previousState, newState);
+
+        // Handle health check timer
+        if (newState == CircuitState.open && healthCheck != null) {
+          _startHealthCheck();
+        } else if (newState != CircuitState.open) {
+          _stopHealthCheck();
+        }
+      },
+    );
+  }
+
+  void _onSuccess(Duration latency, {int? statusCode}) {
+    _stateController.incrementSuccess();
+    _metricsManager.recordSuccess(latency);
+
+    _emitEvent(() => RequestSuccessEvent(
+          statusCode: statusCode,
+          duration: latency,
+        ));
+
+    if (state == CircuitState.halfOpen) {
+      if (successCount >= successThreshold) {
+        // Successfully recovered, reset all counters including backoff
+        _stateController.resetCounters();
+        _stateController.resetConsecutiveOpenings();
+        _transitionTo(CircuitState.closed);
+      }
+    }
+  }
+
+  void _onFailure(Duration latency, {int? statusCode, Object? error}) {
+    _stateController.incrementFailure();
+    _metricsManager.recordFailure(latency);
+
+    _emitEvent(() => RequestFailureEvent(
+          statusCode: statusCode,
+          error: error,
+          duration: latency,
+        ));
+
+    bool shouldOpen = false;
+
+    if (state == CircuitState.halfOpen) {
+      // Any failure in half-open state immediately opens the circuit
+      shouldOpen = true;
+    } else if (failureCount >= failureThreshold) {
+      shouldOpen = true;
+    } else if (_shouldOpenBasedOnFailureRate()) {
+      shouldOpen = true;
+    }
+
+    if (shouldOpen) {
+      _openCircuit();
+    }
+  }
+
+  bool _shouldOpenBasedOnFailureRate() {
+    if (failureRateThreshold == null) {
+      return false;
+    }
+
+    if (_metricsManager.totalCount < minimumRequestsInWindow) {
+      return false;
+    }
+
+    return _metricsManager.failureRate >= failureRateThreshold!;
+  }
+
+  void _openCircuit() {
+    _stateController.openCircuit();
+    _transitionTo(CircuitState.open);
+  }
+
+  void _startHealthCheck() {
+    _healthCheckMonitor.start(_performHealthCheck);
+  }
+
+  void _stopHealthCheck() {
+    _healthCheckMonitor.stop();
+  }
+
+  Future<void> _performHealthCheck() async {
+    await _healthCheckMonitor.performHealthCheck(
+      currentState: state,
+      onEvent: (bool isHealthy, Duration duration) {
+        _emitEvent(() => HealthCheckEvent(
+              isHealthy: isHealthy,
+              duration: duration,
+            ));
+      },
+      onHealthy: () {
+        _transitionTo(CircuitState.halfOpen);
+      },
+    );
+  }
+
+  void _emitEvent(CircuitBreakerEvent Function() eventProvider) {
+    if (!_eventController.isClosed && _eventController.hasListener) {
+      _eventController.add(eventProvider());
+    }
+  }
+}
+
+/// Private manager for metrics and sliding window calculations
+class _MetricsManager {
+  final SlidingWindow _slidingWindow;
+  final CircuitBreakerMetrics _metrics = CircuitBreakerMetrics();
+
+  _MetricsManager(Duration windowDuration)
+      : _slidingWindow = SlidingWindow(windowDuration);
+
+  void recordSuccess(Duration latency) {
+    _slidingWindow.recordSuccess();
+    _metrics.recordSuccess(latency);
+  }
+
+  void recordFailure(Duration latency) {
+    _slidingWindow.recordFailure();
+    _metrics.recordFailure(latency);
+  }
+
+  void recordRejected() => _metrics.recordRejected();
+  void recordFallback() => _metrics.recordFallback();
+  void recordRetry() => _metrics.recordRetry();
+
+  double get failureRate => _slidingWindow.failureRate;
+  int get totalCount => _slidingWindow.totalCount;
+  void clear() {
+    _slidingWindow.clear();
+    _metrics.reset();
+  }
+  CircuitBreakerMetrics get metrics => _metrics;
+}
+
+/// Private controller for managing circuit breaker state transitions
+class _StateController {
+  CircuitState _state = CircuitState.closed;
+  int _failureCount = 0;
+  int _successCount = 0;
+  int _consecutiveOpenings = 0;
+  DateTime _nextAttempt = clock.now();
+
+  final Duration timeout;
+  final bool useExponentialBackoff;
+  final double backoffMultiplier;
+  final Duration maxTimeout;
+
+  _StateController({
+    required this.timeout,
+    required this.useExponentialBackoff,
+    required this.backoffMultiplier,
+    required this.maxTimeout,
+  });
+
+  CircuitState get state => _state;
+  DateTime get nextAttempt => _nextAttempt;
+  int get failureCount => _failureCount;
+  int get successCount => _successCount;
+  int get consecutiveOpenings => _consecutiveOpenings;
+
+  bool get canAttemptRecovery =>
+      _nextAttempt.millisecondsSinceEpoch <= clock.now().millisecondsSinceEpoch;
+
+  void transitionTo(CircuitState newState,
+      {void Function(CircuitState, CircuitState)? onTransition}) {
+    if (_state != newState) {
+      final CircuitState previousState = _state;
+      _state = newState;
+      onTransition?.call(previousState, newState);
+    }
+  }
+
+  void incrementFailure() {
+    _successCount = 0;
+    _failureCount++;
+  }
+
+  void incrementSuccess() {
+    _failureCount = 0;
+    if (_state == CircuitState.halfOpen) {
+      _successCount++;
+    }
+  }
+
+  void openCircuit() {
+    if (_state != CircuitState.open) {
+      _consecutiveOpenings++;
+    }
+    _nextAttempt = clock.now().add(_calculateRecoveryTimeout());
+  }
+
+  /// Resets failure and success counters.
+  void resetCounters() {
+    _failureCount = 0;
+    _successCount = 0;
+  }
+
+  /// Resets the consecutive openings counter used for exponential backoff.
+  void resetConsecutiveOpenings() {
+    _consecutiveOpenings = 0;
+  }
+
+  /// Performs a full reset of the state controller.
+  void reset() {
+    resetCounters();
+    resetConsecutiveOpenings();
+  }
+
+  Duration _calculateRecoveryTimeout() {
+    if (!useExponentialBackoff || _consecutiveOpenings <= 1) {
+      return timeout;
+    }
+
+    int multiplier = 1;
+    for (int i = 1; i < _consecutiveOpenings; i++) {
+      multiplier = (multiplier * backoffMultiplier).round();
+    }
+
+    final Duration calculatedTimeout = Duration(
+      milliseconds: timeout.inMilliseconds * multiplier,
+    );
+
+    return calculatedTimeout > maxTimeout ? maxTimeout : calculatedTimeout;
+  }
+
+  void restore(CircuitBreakerState savedState) {
+    _state = savedState.state;
+    _failureCount = savedState.failureCount;
+    _successCount = savedState.successCount;
+    _nextAttempt = savedState.nextAttempt;
+    _consecutiveOpenings = savedState.consecutiveOpenings;
+  }
+}
+
+/// Private executor for handling request attempts and retries
+class _RequestExecutor {
+  final Client _client;
+  final Duration requestTimeout;
+  final int maxConcurrentRequests;
+  final RetryPolicy retryPolicy;
+  int _pendingRequests = 0;
+
+  _RequestExecutor({
+    required Client client,
+    required this.requestTimeout,
+    required this.maxConcurrentRequests,
+    required this.retryPolicy,
+  }) : _client = client;
+
+  int get pendingRequests => _pendingRequests;
+
+  Future<T> executeFunctionWithRetry<T>(
+    Future<T> Function() function, {
+    required void Function() onRetry,
+    required void Function(int attempt, int maxRetries, Object error)
+        onRetryEvent,
+  }) async {
+    int attempt = 0;
+
+    while (true) {
+      try {
+        return await function();
+      } catch (e) {
+        if (attempt < retryPolicy.maxRetries &&
+            retryPolicy.shouldRetryForException(e)) {
+          attempt++;
+
+          onRetry();
+          onRetryEvent(attempt, retryPolicy.maxRetries, e);
+
+          final Duration delay = retryPolicy.getDelayForAttempt(attempt);
+          await Future<void>.delayed(delay);
+
+          continue;
+        }
+
+        rethrow;
+      }
+    }
+  }
+
+  Future<StreamedResponse> executeWithRetry(
+    BaseRequest request, {
+    required void Function() onRetry,
+    required void Function(int attempt, int maxRetries, Object error)
+        onRetryEvent,
+  }) async {
     int attempt = 0;
 
     while (true) {
@@ -515,12 +862,10 @@ class CircuitBreaker {
             retryPolicy.shouldRetryForException(e)) {
           attempt++;
 
-          _metrics.recordRetry();
-
-          _emitEvent(() => RequestRetryEvent(attempt: attempt, maxRetries: retryPolicy.maxRetries, error: e));
+          onRetry();
+          onRetryEvent(attempt, retryPolicy.maxRetries, e);
 
           final Duration delay = retryPolicy.getDelayForAttempt(attempt);
-
           await Future<void>.delayed(delay);
 
           continue;
@@ -553,8 +898,6 @@ class CircuitBreaker {
       return copy;
     }
 
-    // Fallback for other request types (e.g., StreamedRequest) which might not be retry-able
-
     return request;
   }
 
@@ -566,189 +909,43 @@ class CircuitBreaker {
       ..persistentConnection = source.persistentConnection;
   }
 
-  /// Resets the circuit breaker to its initial closed state.
-  void reset() {
-    _failureCount = 0;
-    _successCount = 0;
-    _consecutiveOpenings = 0;
-    _slidingWindow.clear();
-    _stopHealthCheck();
-    _transitionTo(CircuitState.closed);
-  }
+  void incrementPending() => _pendingRequests++;
+  void decrementPending() => _pendingRequests--;
+}
 
-  /// Saves the current state to storage
-  Future<void> saveState() async {
-    if (storage == null || key == null) {
-      return;
-    }
+/// Private monitor for managing service health checks
+class _HealthCheckMonitor {
+  final HealthCheckCallback? healthCheck;
+  final Duration healthCheckInterval;
+  Timer? _healthCheckTimer;
 
-    final CircuitBreakerState savedState = CircuitBreakerState(
-      state: _state,
-      failureCount: _failureCount,
-      successCount: _successCount,
-      nextAttempt: _nextAttempt,
-      savedAt: clock.now(),
-      consecutiveOpenings: _consecutiveOpenings,
-    );
+  _HealthCheckMonitor({
+    required this.healthCheck,
+    required this.healthCheckInterval,
+  });
 
-    await storage!.save(key!, savedState);
-  }
+  void start(Future<void> Function() onPerformHealthCheck) {
+    stop();
 
-  /// Restores state from storage
-  Future<bool> restoreState() async {
-    if (storage == null || key == null) {
-      return false;
-    }
-
-    final CircuitBreakerState? savedState = await storage!.load(key!);
-    if (savedState == null) {
-      return false;
-    }
-
-    _state = savedState.state;
-    _failureCount = savedState.failureCount;
-    _successCount = savedState.successCount;
-    _nextAttempt = savedState.nextAttempt;
-    _consecutiveOpenings = savedState.consecutiveOpenings;
-
-    // Start health check if circuit is open
-    if (_state == CircuitState.open && healthCheck != null) {
-      _startHealthCheck();
-    }
-
-    return true;
-  }
-
-  /// Disposes resources used by this circuit breaker
-  void dispose() {
-    _stopHealthCheck();
-    _eventController.close();
-  }
-
-  void _transitionTo(CircuitState newState) {
-    if (_state != newState) {
-      final CircuitState previousState = _state;
-      _state = newState;
-
-      _emitEvent(() => StateChangedEvent(
-            previousState: previousState,
-            newState: newState,
-          ));
-
-      onStateChange?.call(previousState, newState);
-
-      // Handle health check timer
-      if (newState == CircuitState.open && healthCheck != null) {
-        _startHealthCheck();
-      } else if (newState != CircuitState.open) {
-        _stopHealthCheck();
-      }
+    if (healthCheck != null) {
+      _healthCheckTimer = Timer.periodic(
+        healthCheckInterval,
+        (_) => onPerformHealthCheck(),
+      );
     }
   }
 
-  void _onSuccess(Duration latency, {int? statusCode}) {
-    _failureCount = 0;
-    _slidingWindow.recordSuccess();
-    _metrics.recordSuccess(latency);
-
-    _emitEvent(() => RequestSuccessEvent(
-          statusCode: statusCode,
-          duration: latency,
-        ));
-
-    if (_state == CircuitState.halfOpen) {
-      _successCount++;
-
-      if (_successCount >= successThreshold) {
-        _successCount = 0;
-        _consecutiveOpenings = 0;
-        _transitionTo(CircuitState.closed);
-      }
-    }
-  }
-
-  void _onFailure(Duration latency, {int? statusCode, Object? error}) {
-    _successCount = 0;
-    _failureCount++;
-    _slidingWindow.recordFailure();
-    _metrics.recordFailure(latency);
-
-    _emitEvent(() => RequestFailureEvent(
-          statusCode: statusCode,
-          error: error,
-          duration: latency,
-        ));
-
-    bool shouldOpen = false;
-
-    if (_state == CircuitState.halfOpen) {
-      // Any failure in half-open state immediately opens the circuit
-      shouldOpen = true;
-    } else if (_failureCount >= failureThreshold) {
-      shouldOpen = true;
-    } else if (_shouldOpenBasedOnFailureRate()) {
-      shouldOpen = true;
-    }
-
-    if (shouldOpen) {
-      _openCircuit();
-    }
-  }
-
-  bool _shouldOpenBasedOnFailureRate() {
-    if (failureRateThreshold == null) {
-      return false;
-    }
-
-    if (_slidingWindow.totalCount < minimumRequestsInWindow) {
-      return false;
-    }
-
-    return _slidingWindow.failureRate >= failureRateThreshold!;
-  }
-
-  void _openCircuit() {
-    if (_state != CircuitState.open) {
-      _consecutiveOpenings++;
-    }
-
-    _nextAttempt = clock.now().add(_calculateRecoveryTimeout());
-    _transitionTo(CircuitState.open);
-  }
-
-  Duration _calculateRecoveryTimeout() {
-    if (!useExponentialBackoff || _consecutiveOpenings <= 1) {
-      return timeout;
-    }
-
-    int multiplier = 1;
-    for (int i = 1; i < _consecutiveOpenings; i++) {
-      multiplier = (multiplier * backoffMultiplier).round();
-    }
-
-    final Duration calculatedTimeout = Duration(
-      milliseconds: timeout.inMilliseconds * multiplier,
-    );
-
-    return calculatedTimeout > maxTimeout ? maxTimeout : calculatedTimeout;
-  }
-
-  void _startHealthCheck() {
-    _stopHealthCheck();
-
-    _healthCheckTimer = Timer.periodic(
-      healthCheckInterval,
-      (_) => _performHealthCheck(),
-    );
-  }
-
-  void _stopHealthCheck() {
+  void stop() {
     _healthCheckTimer?.cancel();
     _healthCheckTimer = null;
   }
 
-  Future<void> _performHealthCheck() async {
-    if (healthCheck == null || _state != CircuitState.open) {
+  Future<void> performHealthCheck({
+    required CircuitState currentState,
+    required void Function(bool isHealthy, Duration duration) onEvent,
+    required void Function() onHealthy,
+  }) async {
+    if (healthCheck == null || currentState != CircuitState.open) {
       return;
     }
 
@@ -758,27 +955,15 @@ class CircuitBreaker {
       final bool isHealthy = await healthCheck!();
       final Duration duration = clock.now().difference(startTime);
 
-      _emitEvent(() => HealthCheckEvent(
-            isHealthy: isHealthy,
-            duration: duration,
-          ));
+      onEvent(isHealthy, duration);
 
       if (isHealthy) {
-        _transitionTo(CircuitState.halfOpen);
+        onHealthy();
       }
     } catch (e) {
       final Duration duration = clock.now().difference(startTime);
 
-      _emitEvent(() => HealthCheckEvent(
-            isHealthy: false,
-            duration: duration,
-          ));
-    }
-  }
-
-  void _emitEvent(CircuitBreakerEvent Function() eventProvider) {
-    if (!_eventController.isClosed && _eventController.hasListener) {
-      _eventController.add(eventProvider());
+      onEvent(false, duration);
     }
   }
 }
